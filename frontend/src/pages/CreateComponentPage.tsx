@@ -1595,6 +1595,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
                   aria-label="Extension"
                   {...register(`distribution.maven.${i}.extension` as const)}
                 />
+                <FieldError message={errors.distribution?.maven?.[i]?.extension?.message ?? distributionIssue(`distribution.maven.${i}.extension`)} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor={`create-maven-${i}-classifier`} className="text-xs">Classifier</Label>
@@ -1605,6 +1606,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
                   aria-label="Classifier"
                   {...register(`distribution.maven.${i}.classifier` as const)}
                 />
+                <FieldError message={errors.distribution?.maven?.[i]?.classifier?.message ?? distributionIssue(`distribution.maven.${i}.classifier`)} />
               </div>
             </div>
           </div>
