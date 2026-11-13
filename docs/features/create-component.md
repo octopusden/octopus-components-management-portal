@@ -26,8 +26,8 @@ rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.
   and Solution (explicit external only). The create then names no profile and no field rules apply
   — unless a profile has the chosen classification: its tile is then shown and selected, and the
   create uses it.
-- Picking a template replaces the steps with Parameters and Review & create (see "From a
-  template"); picking a regular profile again returns to the regular steps with what was typed.
+- Picking a template replaces the steps with Parameters and Review & create, staying on Profile
+  until Next as a regular profile does (see "From a template"); picking a regular profile again returns to the regular steps with what was typed.
 - Scratch pre-selects the first usable regular profile; a template is never pre-selected. A clone
   pre-selects the first usable profile whose
   classification matches the source and whose key rule the source's key passes, else the first

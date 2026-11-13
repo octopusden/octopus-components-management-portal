@@ -53,7 +53,8 @@ interface TemplateWizardProps {
 }
 
 /**
- * Creating a component from one template: Profile → Parameters → Review & create. Typing sends
+ * Creating a component from one template: Profile → Parameters → Review & create. It opens on
+ * Profile with the template picked, and moves on only on Next, as the regular steps do. Typing sends
  * nothing to the registry; a dry run runs on Next and when an edited overridable field is left.
  * Review is reached only through a dry run of the values on screen.
  */
@@ -74,8 +75,8 @@ export function TemplateWizard({
   const { data: portalLinks } = usePortalLinks()
   const gitBaseUrl = portalLinks?.gitBaseUrl
 
-  const [step, setStep] = useState<Step>('parameters')
-  const [visited, setVisited] = useState<ReadonlySet<Step>>(new Set(['profile', 'parameters']))
+  const [step, setStep] = useState<Step>('profile')
+  const [visited, setVisited] = useState<ReadonlySet<Step>>(new Set(['profile']))
   const [edited, setEdited] = useState<Record<string, string[]>>({})
   const [registryParameterErrors, setRegistryParameterErrors] = useState<Record<string, string>>({})
   const [overrides, setOverrides] = useState<Record<string, string[]>>({})

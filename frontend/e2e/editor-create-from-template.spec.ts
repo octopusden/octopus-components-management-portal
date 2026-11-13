@@ -90,6 +90,7 @@ test.describe('Create component from a template — admin smoke', () => {
     const tile = page.getByRole('radio', { name: 'Client plugin' })
     await expect(tile.getByText('Template')).toBeVisible()
     await tile.click()
+    await page.getByRole('button', { name: /^next$/i }).click()
 
     const code = page.getByTestId('template-parameter-PLUGIN_CODE').getByRole('textbox')
     await code.fill('pay')

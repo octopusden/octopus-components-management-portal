@@ -10,15 +10,18 @@ Templates tab.
 ### Requirement: A template tile leads to its parameters
 
 Picking a usable template tile on the Profile step SHALL load that template from the registry and
-replace the wizard's steps with Parameters and Review & create. Picking a regular profile tile
+replace the wizard's steps with Parameters and Review & create, staying on Profile until Next, as a
+regular profile does. Picking a regular profile tile
 afterwards SHALL restore the regular steps with the values entered there before. Creating from a
 template needs the user's `CREATE_COMPONENTS` permission, as any create.
 
 #### Scenario: Two steps after a template
 
 - **WHEN** the user picks the "Client plugin" template tile
-- **THEN** the step list shows Profile, Parameters and Review & create, and the wizard is on
-  Parameters
+- **THEN** the step list shows Profile, Parameters and Review & create, and the wizard stays on
+  Profile with the tile picked
+- **WHEN** the user then clicks Next
+- **THEN** the wizard is on Parameters
 
 #### Scenario: Back to a regular profile
 
