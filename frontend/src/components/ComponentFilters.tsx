@@ -13,6 +13,8 @@ import { useClientCodes } from '../hooks/useClientCodes'
 import { useJiraProjectKeys } from '../hooks/useJiraProjectKeys'
 import { useParentComponentNames } from '../hooks/useParentComponentNames'
 import { useGroupKeys } from '../hooks/useGroupKeys'
+import { useReleaseManagers } from '../hooks/useReleaseManagers'
+import { useSecurityChampions } from '../hooks/useSecurityChampions'
 import { useFieldOptions } from '../hooks/useFieldOptions'
 import {
   useFieldConfigEntry,
@@ -426,6 +428,17 @@ export function ComponentFilters({
   const { data: groupKeyOptions = [], isLoading: groupKeysLoading } = useGroupKeys({
     enabled: groupKeysActivated,
   })
+  // The people pair is served by CRS since v3.0.16; against an older CRS the same
+  // lazy gate + useMetaInUse 404→[] contract keeps the picker openable (and silent
+  // in the console) rather than erroring.
+  const [releaseManagersActivated, setReleaseManagersActivated] = useState(false)
+  const { data: releaseManagerOptions = [], isLoading: releaseManagersLoading } = useReleaseManagers({
+    enabled: releaseManagersActivated,
+  })
+  const [securityChampionsActivated, setSecurityChampionsActivated] = useState(false)
+  const { data: securityChampionOptions = [], isLoading: securityChampionsLoading } = useSecurityChampions({
+    enabled: securityChampionsActivated,
+  })
 
   // Field-config entries for the extended filters — `searchabilityFor` resolves
   // the effective placement (Main / Extended / None) per field, falling back to
@@ -441,6 +454,8 @@ export function ComponentFilters({
   const { entry: canBeParentEntry } = useFieldConfigEntry('component.canBeParent')
   const { entry: autoReleaseEntry } = useFieldConfigEntry('component.autoRelease')
   const { entry: groupKeyEntry } = useFieldConfigEntry('component.groupKey')
+  const { entry: releaseManagerEntry } = useFieldConfigEntry('component.releaseManager')
+  const { entry: securityChampionEntry } = useFieldConfigEntry('component.securityChampion')
   const { entry: distributionExplicitEntry } = useFieldConfigEntry('component.distributionExplicit')
   const { entry: distributionExternalEntry } = useFieldConfigEntry('component.distributionExternal')
   // The classic multi-select filters are placed by the SAME resolver, so an
@@ -457,7 +472,7 @@ export function ComponentFilters({
   const ownerPlace = place('component.componentOwner', ownerFilterEntry)
 
   const multi = (
-    key: 'system' | 'buildSystem' | 'labels' | 'owner' | 'clientCode' | 'jiraProjectKey' | 'javaVersion' | 'parentComponentName' | 'groupKey',
+    key: 'system' | 'buildSystem' | 'labels' | 'owner' | 'clientCode' | 'jiraProjectKey' | 'javaVersion' | 'parentComponentName' | 'groupKey' | 'releaseManager' | 'securityChampion',
     props: {
       options: string[]
       isLoading: boolean
@@ -560,6 +575,18 @@ export function ComponentFilters({
       active: !!filter.parentComponentName?.length, cleared: { parentComponentName: undefined }, controlId: 'filter-parentComponentName',
       control: multi('parentComponentName', { options: parentComponentNameOptions, isLoading: parentNamesLoading, placeholder: 'All parents', unitLabel: 'parent', onFirstOpen: () => setParentNamesActivated(true) }),
       editor: multi('parentComponentName', { options: parentComponentNameOptions, isLoading: parentNamesLoading, placeholder: 'All parents', unitLabel: 'parent', onFirstOpen: () => setParentNamesActivated(true) }, true),
+    },
+    {
+      id: 'releaseManager', label: 'Release manager', group: 'Ownership', place: place('component.releaseManager', releaseManagerEntry),
+      active: !!filter.releaseManager?.length, cleared: { releaseManager: undefined }, controlId: 'filter-releaseManager',
+      control: multi('releaseManager', { options: releaseManagerOptions, isLoading: releaseManagersLoading, placeholder: 'All release managers', unitLabel: 'release manager', onFirstOpen: () => setReleaseManagersActivated(true) }),
+      editor: multi('releaseManager', { options: releaseManagerOptions, isLoading: releaseManagersLoading, placeholder: 'All release managers', unitLabel: 'release manager', onFirstOpen: () => setReleaseManagersActivated(true) }, true),
+    },
+    {
+      id: 'securityChampion', label: 'Security champion', group: 'Ownership', place: place('component.securityChampion', securityChampionEntry),
+      active: !!filter.securityChampion?.length, cleared: { securityChampion: undefined }, controlId: 'filter-securityChampion',
+      control: multi('securityChampion', { options: securityChampionOptions, isLoading: securityChampionsLoading, placeholder: 'All security champions', unitLabel: 'security champion', onFirstOpen: () => setSecurityChampionsActivated(true) }),
+      editor: multi('securityChampion', { options: securityChampionOptions, isLoading: securityChampionsLoading, placeholder: 'All security champions', unitLabel: 'security champion', onFirstOpen: () => setSecurityChampionsActivated(true) }, true),
     },
     {
       id: 'canBeParent', label: 'Can be parent', group: 'Structure', place: place('component.canBeParent', canBeParentEntry),
