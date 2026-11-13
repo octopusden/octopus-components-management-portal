@@ -80,6 +80,7 @@ import {
   type ProfileFlags,
 } from '../lib/component/createProfile'
 import { ruleErrorOf, RULE_FORM_FIELDS } from '../lib/component/profileRules'
+import { mavenCoordinate } from '../lib/component/mavenCoordinate'
 import type { ComponentDetail } from '../lib/types'
 import { OWNERSHIP_MODES } from '../lib/artifactOwnership'
 import { createJiraKeyError, normalizeJiraKey, normalizeChangeComment } from '../lib/editor/jiraKey'
@@ -1585,10 +1586,32 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
                 />
                 <FieldError message={errors.distribution?.maven?.[i]?.artifactPattern?.message ?? distributionIssue(`distribution.maven.${i}.artifactPattern`)} />
               </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={`create-maven-${i}-extension`} className="text-xs">Extension</Label>
+                <Input
+                  id={`create-maven-${i}-extension`}
+                  className="font-mono text-xs"
+                  placeholder="jar"
+                  aria-label="Extension"
+                  {...register(`distribution.maven.${i}.extension` as const)}
+                />
+                <FieldError message={errors.distribution?.maven?.[i]?.extension?.message ?? distributionIssue(`distribution.maven.${i}.extension`)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={`create-maven-${i}-classifier`} className="text-xs">Classifier</Label>
+                <Input
+                  id={`create-maven-${i}-classifier`}
+                  className="font-mono text-xs"
+                  placeholder="sources"
+                  aria-label="Classifier"
+                  {...register(`distribution.maven.${i}.classifier` as const)}
+                />
+                <FieldError message={errors.distribution?.maven?.[i]?.classifier?.message ?? distributionIssue(`distribution.maven.${i}.classifier`)} />
+              </div>
             </div>
           </div>
         ))}
-        <Button type="button" variant="outline" size="sm" onClick={() => mavenRows.append({ groupPattern: '', artifactPattern: '' })}>
+        <Button type="button" variant="outline" size="sm" onClick={() => mavenRows.append({ groupPattern: '', artifactPattern: '', extension: '', classifier: '' })}>
           <Plus className="h-4 w-4" />
           Add Maven GAV
         </Button>
@@ -2213,7 +2236,7 @@ function SummaryDiff({
   const distRows: Array<[string, string]> = [
     ...dist.maven
       .filter((r) => r.groupPattern.trim() !== '' || r.artifactPattern.trim() !== '')
-      .map((r) => ['Maven GAV', `${r.groupPattern}:${r.artifactPattern}`] as [string, string]),
+      .map((r) => ['Maven GAV', mavenCoordinate(r)] as [string, string]),
     ...dist.docker
       .filter((r) => r.imageName.trim() !== '')
       .map((r) => ['Docker image', r.flavor.trim() ? `${r.imageName}:${r.flavor}` : r.imageName] as [string, string]),

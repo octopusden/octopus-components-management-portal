@@ -256,6 +256,21 @@ describe('buildCreateRequest — distribution rows (per family, never gated)', (
     expect('packages' in req.baseConfiguration!).toBe(false)
   })
 
+  it('maven extension and classifier are sent trimmed; blank → null', () => {
+    const req = buildCreateRequest(
+      withDistribution({
+        maven: [
+          { groupPattern: 'org.example.solution.acme', artifactPattern: 'neo-solution-acme', extension: ' tgz ', classifier: ' dist ' },
+          { groupPattern: 'org.acme', artifactPattern: 'svc', extension: '   ', classifier: '' },
+        ],
+      }),
+    )
+    expect(req.baseConfiguration?.mavenArtifacts).toEqual([
+      { groupPattern: 'org.example.solution.acme', artifactPattern: 'neo-solution-acme', extension: 'tgz', classifier: 'dist' },
+      { groupPattern: 'org.acme', artifactPattern: 'svc', extension: null, classifier: null },
+    ])
+  })
+
   it('docker rows → dockerImages entries, flavor trimmed / blank → null', () => {
     const req = buildCreateRequest(
       withDistribution({ docker: [{ imageName: 'acme/svc', flavor: '  alpine  ' }, { imageName: 'acme/other', flavor: '   ' }] }),

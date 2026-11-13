@@ -58,11 +58,12 @@ rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.
   host; supported group-ID prefix) are one function over the create request
   (`lib/component/portalCreateRules.ts`), shared with template review.
 - **Distribution rows (all types, never gated):** the Distribution step offers repeatable rows of
-  every family — Maven GAV, Docker image, package, generic path (CRS SYS-098) — to ANY
-  classification; CRS accepts coordinates for any combination, so the old explicit+external-only
+  every family — Maven GAV (with an optional extension and classifier), Docker image, package,
+  generic path (CRS SYS-098) — to ANY classification; CRS accepts coordinates for any combination, so the old explicit+external-only
   gate was Portal UX, not a server rule. A fully blank row sends nothing; a partially filled one
   blocks with a field-level message (`makeCreateSchema`'s superRefine — "Artifact ID is required"
-  etc.). The one server-side rule the Portal mirrors: an explicit+external component needs at
+  etc.); a Maven extension or classifier counts as filling the row, so it needs both the groupId
+  and the artifactId. The one server-side rule the Portal mirrors: an explicit+external component needs at
   least one row of some family (CRS rule #6) — shown at the section top, with the message
   constant shared with template review (`COORDINATE_REQUIRED_MESSAGE`). The supported-prefix
   check applies to every sent Maven groupId regardless of classification. fileUrl distributions

@@ -357,6 +357,35 @@ describe('CreateComponentPage — wizard UI polish', () => {
     ])
   })
 
+  it('POSTs a Maven row with its extension and classifier, and shows them on Review', async () => {
+    renderWizard()
+    await walkToDistribution()
+    await userEvent.click(screen.getByRole('button', { name: /add maven gav/i }))
+    await userEvent.type(screen.getByLabelText('groupId'), 'org.example.widget')
+    await userEvent.type(screen.getByLabelText('artifactId'), 'widget')
+    await userEvent.type(screen.getByLabelText('Extension'), 'tgz')
+    await userEvent.type(screen.getByLabelText('Classifier'), 'dist')
+    await clickNext() // → Escrow
+    await clickNext() // → Review
+    expect(screen.getByText(/org\.example\.widget:widget:tgz:dist$/)).toBeDefined()
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    expect(mockMutateAsync.mock.calls[0]![0].baseConfiguration.mavenArtifacts).toEqual([
+      { groupPattern: 'org.example.widget', artifactPattern: 'widget', extension: 'tgz', classifier: 'dist' },
+    ])
+  })
+
+  it('blocks a Maven row that has only an extension, on the groupId and artifactId', async () => {
+    renderWizard()
+    await walkToDistribution()
+    await userEvent.click(screen.getByRole('button', { name: /add maven gav/i }))
+    await userEvent.type(screen.getByLabelText('Extension'), 'tgz')
+    await clickNext()
+    expect(await screen.findByText('Group ID is required')).toBeDefined()
+    expect(screen.getByText('Artifact ID is required')).toBeDefined()
+  })
+
   it('shows a cross-step banner on an earlier step when a later step is invalid', async () => {
     renderWizard()
     await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
@@ -1116,6 +1145,22 @@ describe('CreateComponentPage — profile rules on fields the step does not show
     await userEvent.type(screen.getAllByLabelText('groupId')[1]!, 'net.example')
     await userEvent.type(screen.getAllByLabelText('artifactId')[1]!, 'svc')
     await waitFor(() => expect(screen.getAllByText('Group must start with com.')).toHaveLength(1))
+  })
+
+  it.each([
+    ['extension', 'Extension', 'zip'],
+    ['classifier', 'Classifier', 'sources'],
+  ])('shows a Maven %s rule message under its own field', async (field, label, value) => {
+    withRule(`baseConfiguration.mavenArtifacts[0].${field}`, 'dist', `Use the dist ${field}`)
+    renderWizard()
+    await userEvent.click(screen.getByRole('button', { name: /^Distribution$/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add maven gav/i }))
+    await userEvent.type(screen.getByLabelText('groupId'), 'org.example')
+    await userEvent.type(screen.getByLabelText('artifactId'), 'svc')
+    await userEvent.type(screen.getByLabelText(label), value)
+    await waitFor(() =>
+      expect(within(screen.getByLabelText(label).parentElement!).getByText(`Use the dist ${field}`)).toBeDefined(),
+    )
   })
 
   it('clears a Maven-group rule message from row 1 once row 0 becomes the first sent row', async () => {

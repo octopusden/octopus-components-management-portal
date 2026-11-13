@@ -95,6 +95,8 @@ const KNOWN: readonly { path: string; label: string; group: string; read: Reader
   { path: `${JIRA}.buildVersionFormat`, label: 'Build Version Format', group: 'Jira', read: (c) => c.baseConfiguration?.jira?.buildVersionFormat },
   { path: 'baseConfiguration.mavenArtifacts[0].groupPattern', label: 'Maven Group ID', group: 'Distribution', read: (c) => c.baseConfiguration?.mavenArtifacts?.[0]?.groupPattern },
   { path: 'baseConfiguration.mavenArtifacts[0].artifactPattern', label: 'Maven Artifact ID', group: 'Distribution', read: (c) => c.baseConfiguration?.mavenArtifacts?.[0]?.artifactPattern },
+  { path: 'baseConfiguration.mavenArtifacts[0].extension', label: 'Maven Extension', group: 'Distribution', read: (c) => c.baseConfiguration?.mavenArtifacts?.[0]?.extension },
+  { path: 'baseConfiguration.mavenArtifacts[0].classifier', label: 'Maven Classifier', group: 'Distribution', read: (c) => c.baseConfiguration?.mavenArtifacts?.[0]?.classifier },
   { path: 'baseConfiguration.dockerImages[0].imageName', label: 'Docker image', group: 'Distribution', read: (c) => c.baseConfiguration?.dockerImages?.[0]?.imageName },
   { path: 'baseConfiguration.dockerImages[0].flavor', label: 'Docker flavor', group: 'Distribution', read: (c) => c.baseConfiguration?.dockerImages?.[0]?.flavor },
   { path: 'baseConfiguration.packages[0].packageType', label: 'Package type', group: 'Distribution', read: (c) => c.baseConfiguration?.packages?.[0]?.packageType },
