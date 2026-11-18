@@ -165,6 +165,26 @@ describe('reviewFieldGroups', () => {
       },
     ])
   })
+
+  it('lists a Maven GAV with its extension and classifier under Distribution', () => {
+    const withMaven = {
+      ...component,
+      baseConfiguration: {
+        ...component.baseConfiguration,
+        mavenArtifacts: [{ groupPattern: 'org.example.solution.acme', artifactPattern: 'neo-solution-acme', extension: 'tgz', classifier: 'dist' }],
+      },
+    } as unknown as NonNullable<TemplateRun['component']>
+    const dist = reviewFieldGroups(withMaven).find((g) => g.heading === 'Distribution')
+    expect(dist?.rows.map((r) => [r.label, r.value])).toEqual([
+      ['Maven Group ID', ['org.example.solution.acme']],
+      ['Maven Artifact ID', ['neo-solution-acme']],
+      ['Maven Extension', ['tgz']],
+      ['Maven Classifier', ['dist']],
+    ])
+    expect(reviewFieldGroups(withMaven).find((g) => g.heading === 'Other fields')?.rows.map((r) => r.path)).not.toContain(
+      'baseConfiguration.mavenArtifacts[0].extension',
+    )
+  })
 })
 
 describe('applyOverrides', () => {

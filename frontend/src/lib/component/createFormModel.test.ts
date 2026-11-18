@@ -497,6 +497,24 @@ describe('makeCreateSchema — distribution rows (all types, never gated by clas
     })
   })
 
+  it.each([
+    ['extension', { extension: 'tgz' }],
+    ['classifier', { classifier: 'dist' }],
+  ])('blocks a maven row with a %s but no groupId or artifactId, on both', (_, qualifier) => {
+    const messages = messagesOf(form({ distribution: { ...initialValues(null, {}).distribution, maven: [{ groupPattern: '', artifactPattern: '', ...qualifier }] } }))
+    expect(messages).toMatchObject({
+      'distribution.maven.0.groupPattern': 'Group ID is required',
+      'distribution.maven.0.artifactPattern': 'Artifact ID is required',
+    })
+  })
+
+  it('a maven row with an extension and the full coordinate is not blocked', () => {
+    const messages = messagesOf(form({
+      distribution: { ...initialValues(null, {}).distribution, maven: [{ groupPattern: 'org.x', artifactPattern: 'svc', extension: 'tgz', classifier: 'dist' }] },
+    }))
+    expect(Object.keys(messages).filter((k) => k.startsWith('distribution.maven'))).toEqual([])
+  })
+
   it('blocks a docker row that has a flavor but no image name', () => {
     expect(messagesOf(form({ distribution: { ...initialValues(null, {}).distribution, docker: [{ imageName: '', flavor: 'alpine' }] } }))).toMatchObject({
       'distribution.docker.0.imageName': 'Image name is required',

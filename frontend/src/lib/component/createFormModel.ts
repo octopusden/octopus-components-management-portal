@@ -203,7 +203,12 @@ export function makeCreateSchema(
       // Never gated; a blank row sends nothing.
       distribution: z.object({
         maven: z.array(
-          z.object({ groupPattern: z.string(), artifactPattern: z.string() }),
+          z.object({
+            groupPattern: z.string(),
+            artifactPattern: z.string(),
+            extension: z.string().optional(),
+            classifier: z.string().optional(),
+          }),
         ),
         docker: z.array(z.object({ imageName: z.string(), flavor: z.string() })),
         packages: z.array(
@@ -233,9 +238,11 @@ export function makeCreateSchema(
       for (const [i, row] of v.distribution.maven.entries()) {
         const group = row.groupPattern.trim()
         const artifact = row.artifactPattern.trim()
-        if (group && !artifact) {
+        const qualified = !!(row.extension?.trim() || row.classifier?.trim())
+        if (!artifact && (group || qualified)) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['distribution', 'maven', i, 'artifactPattern'], message: 'Artifact ID is required' })
-        } else if (!group && artifact) {
+        }
+        if (!group && (artifact || qualified)) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['distribution', 'maven', i, 'groupPattern'], message: 'Group ID is required' })
         }
       }

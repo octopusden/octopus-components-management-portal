@@ -19,7 +19,7 @@ export type PackageType = 'DEB' | 'RPM'
 // Per-family repeatable create rows — never gated by classification (CRS accepts any; only
 // explicit+external REQUIRES ≥1, mirrored in portalCreateRules). fileUrl is editor-only.
 export interface DistributionRows {
-  maven: Array<{ groupPattern: string; artifactPattern: string }>
+  maven: Array<{ groupPattern: string; artifactPattern: string; extension?: string; classifier?: string }>
   docker: Array<{ imageName: string; flavor: string }>
   packages: Array<{ packageType: PackageType; packageName: string }>
   generic: Array<{ path: string }>
@@ -197,7 +197,12 @@ function distributionPatch(
   const sent = sentDistributionRows(rows)
   const mavenArtifacts = sent.maven.map((i) => {
     const r = rows.maven[i]!
-    return { groupPattern: r.groupPattern.trim(), artifactPattern: r.artifactPattern.trim(), extension: null, classifier: null }
+    return {
+      groupPattern: r.groupPattern.trim(),
+      artifactPattern: r.artifactPattern.trim(),
+      extension: r.extension?.trim() || null,
+      classifier: r.classifier?.trim() || null,
+    }
   })
   const dockerImages = sent.docker.map((i) => {
     const r = rows.docker[i]!
